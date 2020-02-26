@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 type Task struct {
@@ -23,6 +24,7 @@ type TaskRequest struct {
 type TaskResult struct {
 	name string
 	data []byte
+	err  error
 }
 
 var (
@@ -68,12 +70,17 @@ func processTask(id int) {
 		reg, _ := regexp.Compile("[^A-Za-z0-9]+")
 		fileName := fmt.Sprintf("%s.%s", reg.ReplaceAllString(url, "-"), "png")
 		output := "" // blank to output image to stdout
-		bytes, err := imgRender.generateImage(url2html(url), "png", output, request.width, request.quality)
+		html, err := url2html(url)
 		if err != nil {
-			log.Printf("[%d] Cannot take a screenshot.\n%v+\n", id, err)
-			resultCh <- TaskResult{fileName, []byte{}}
+			resultCh <- TaskResult{fileName, []byte{}, err}
 		} else {
-			resultCh <- TaskResult{fileName, bytes}
+			bytes, err := imgRender.generateImage(html, "png", output, request.width, request.quality)
+			if err != nil {
+				log.Printf("[%d] Cannot take a screenshot.\n%v+\n", id, err)
+				resultCh <- TaskResult{fileName, []byte{}, err}
+			} else {
+				resultCh <- TaskResult{fileName, bytes, nil}
+			}
 		}
 		log.Printf("[%d] Finished processing %s\n", id, url)
 	}
@@ -93,9 +100,13 @@ func fromUrl(w http.ResponseWriter, req *http.Request) {
 			resultChan: resultChan,
 		}
 		result := <-resultChan
-		if len(result.data) == 0 {
-			w.WriteHeader(500)
-			w.Write([]byte("fail"))
+		if result.err != nil {
+			if strings.HasPrefix(url, "http") {
+				w.WriteHeader(500)
+			} else {
+				w.WriteHeader(400)
+			}
+			w.Write([]byte(result.err.Error()))
 		} else {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Content-Type", "image/png")

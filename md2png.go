@@ -5,14 +5,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 )
 
-func url2html(URL string) string {
+func url2html(URL string) (string, error) {
 	u, err := url.Parse(URL)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	baseUrl := path.Dir(u.Path)
 	if baseUrl != "." && baseUrl != "" {
@@ -23,19 +22,17 @@ func url2html(URL string) string {
 	rv := ""
 	response, err := http.Get(URL)
 	if err != nil {
-		fmt.Printf("%s", err)
-		os.Exit(1)
+		return "", err
 	} else {
 		defer response.Body.Close()
 		contents, err := ioutil.ReadAll(response.Body)
 		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
+			return "", err
 		}
 		rv += fmt.Sprintf("<head><base href=\"%v\"></head>", base)
 		rv += string(contents)
 	}
-	return rv
+	return rv, nil
 }
 
 type ImageRender struct {
